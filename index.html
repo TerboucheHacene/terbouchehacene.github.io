@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+        <meta charset="utf-8" />
+        <meta name="generator" content="Pelican" />
+        <title>A Pelican Blog</title>
+        <link rel="stylesheet" href="/theme/css/main.css" />
+        <link href="/feeds/all.atom.xml" type="application/atom+xml" rel="alternate" title="A Pelican Blog Atom Feed" />
+</head>
+
+<body id="index" class="home">
+        <header id="banner" class="body">
+                <h1><a href="/">A Pelican Blog</a></h1>
+                <nav><ul>
+                    <li><a href="/category/regression.html">Regression</a></li>
+                </ul></nav>
+        </header><!-- /#banner -->
+
+            <aside id="featured" class="body">
+                <article>
+                    <h1 class="entry-title"><a href="/my-first-project.html">My First Project</a></h1>
+<footer class="post-info">
+        <abbr class="published" title="2016-02-03T10:20:00+00:00">
+                Published: mer. 03 février 2016
+        </abbr>
+
+<p>In <a href="/category/regression.html">Regression</a>.</p>
+
+</footer><!-- /.post-info --><h1>Import libraries</h1>
+<div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s1">&#39;TF_CPP_MIN_LOG_LEVEL&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;3&#39;</span>
+<span class="kn">from</span> <span class="nn">data.load_save_data</span> <span class="kn">import</span> <span class="n">PreparData</span>
+<span class="kn">from</span> <span class="nn">data.split_data</span> <span class="kn">import</span> <span class="n">LOOCV</span>
+<span class="kn">from</span> <span class="nn">models.model</span> <span class="kn">import</span> <span class="n">CNN_LSTM</span>
+<span class="kn">from</span> <span class="nn">evaluation.cnn_evaluation</span> <span class="kn">import</span> <span class="n">DataEvaluator</span>
+<span class="kn">from</span> <span class="nn">generators.cnn_generator</span> <span class="kn">import</span> <span class="n">VolumeDataGenerator</span>
+</pre></div>
+
+
+<div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">pandas</span> <span class="k">as</span> <span class="nn">pd</span>
+<span class="kn">from</span> <span class="nn">tensorflow.keras</span> <span class="kn">import</span> <span class="n">backend</span> <span class="k">as</span> <span class="n">K</span>
+<span class="n">K</span><span class="o">.</span><span class="n">set_image_data_format</span><span class="p">(</span><span class="s1">&#39;channels_last&#39;</span><span class="p">)</span>
+</pre></div>
+
+
+<h2>Settings</h2>
+<div class="highlight"><pre><span></span><span class="n">targets</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;Dog_1&quot;</span><span class="p">,</span> <span class="s2">&quot;Dog_2&quot;</span><span class="p">,</span> <span class="s2">&quot;Dog_3&quot;</span><span class="p">,</span> <span class="s2">&quot;Dog_4&quot;</span><span class="p">,</span> <span class="s2">&quot;Dog_5&quot;</span><span class="p">,</span> <span class="s2">&quot;Patient_1&quot;</span><span class="p">,</span> <span class="s2">&quot;Patient_2&quot;</span><span class="p">]</span>
+<span class="n">SETTINGS</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;dataset&quot;</span><span class="p">:</span> <span class="s2">&quot;Kaggle2014Pred&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;data_dir&quot;</span><span class="p">:</span> <span class="s2">&quot;/home/hacene/Documents/Dataset/&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;cachedir&quot;</span><span class="p">:</span> <span class="s2">&quot;/home/hacene/Documents/Architecture_03/Processed_dataset/&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;infodir&quot;</span><span class="p">:</span> <span class="s2">&quot;/home/hacene/Documents/Architecture_03/Processed_dataset/Infos&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;resultdir&quot;</span><span class="p">:</span> <span class="s2">&quot;/home/hacene/Documents/Architecture_03/results/&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;models&quot;</span><span class="p">:</span>  <span class="s2">&quot;/home/hacene/Documents/Architecture_03/results/models/&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;curves&quot;</span><span class="p">:</span>  <span class="s2">&quot;/home/hacene/Documents/Architecture_03/results/curves/&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;window_length&quot;</span><span class="p">:</span> <span class="mi">60</span><span class="p">,</span>
+            <span class="s2">&quot;overlap_ratio&quot;</span><span class="p">:</span> <span class="mf">0.75</span><span class="p">,</span>
+            <span class="p">}</span>
+</pre></div>
+
+
+<div class="highlight"><pre><span></span><span class="n">target</span> <span class="o">=</span> <span class="n">targets</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+</pre></div>
+
+
+<h2>Dataset</h2>
+<div class="highlight"><pre><span></span><span class="c1">##----------------------- Dataset-----------------------------------------------#</span>
+
+<span class="c1"># fisrt load dataframes for precictal and interictal</span>
+<span class="n">df_preictal</span> <span class="o">=</span> \
+    <span class="n">PreparData</span><span class="p">(</span><span class="n">target</span><span class="o">=</span><span class="n">target</span><span class="p">,</span> <span class="n">data_type</span><span class="o">=</span><span class="s2">&quot;preictal&quot;</span><span class="p">,</span> <span class="n">settings</span><span class="o">=</span><span class="n">SETTINGS</span><span class="p">)</span><span class="o">.</span><span class="n">apply</span><span class="p">()</span>
+<span class="n">df_interictal</span> <span class="o">=</span> \
+    <span class="n">PreparData</span><span class="p">(</span><span class="n">target</span><span class="o">=</span><span class="n">target</span><span class="p">,</span> <span class="n">data_type</span><span class="o">=</span><span class="s1">&#39;interictal&#39;</span><span class="p">,</span> <span class="n">settings</span><span class="o">=</span><span class="n">SETTINGS</span><span class="p">)</span><span class="o">.</span><span class="n">apply</span><span class="p">()</span>
+
+<span class="c1"># Split data</span>
+<span class="n">partitions</span><span class="p">,</span> <span class="n">labels</span><span class="p">,</span> <span class="n">df</span> <span class="o">=</span> <span class="n">LOOCV</span><span class="p">(</span><span class="n">df_preictal</span><span class="p">,</span>
+                               <span class="n">df_interictal</span><span class="p">,</span>
+                               <span class="n">val_ratio</span><span class="o">=</span><span class="mf">0.2</span><span class="p">,</span> 
+                               <span class="n">downsampling</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+                               <span class="n">balanced_test</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+                               <span class="n">print_info</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</pre></div>
+
+
+<div class="highlight"><pre><span></span><span class="err">Number of seizures is:  4</span>
+<span class="err">Total number of preictal samples is:  888</span>
+<span class="err">Total number of interictal samples is  4800</span>
+<span class="err">The ratio of interictal samples is  0.84</span>
+</pre></div>
+
+
+<div class="highlight"><pre><span></span><span class="n">pd</span><span class="o">.</span><span class="n">set_option</span><span class="p">(</span><span class="s2">&quot;display.max_rows&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="s2">&quot;display.max_columns&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="s1">&#39;</span><span class="se">\n\n</span><span class="s1"> Some info about partitions</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">)</span>
+<span class="n">df</span>
+</pre></div>
+
+
+<div class="highlight"><pre><span></span><span class="err"> Some info about partitions</span>
+</pre></div>
+
+
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>train_preictal</th>
+      <th>train_interictal</th>
+      <th>train_ratio</th>
+      <th>train_total</th>
+      <th>validation_preictal</th>
+      <th>validation_interictal</th>
+      <th>validation_ratio</th>
+      <th>validation_total</th>
+      <th>test_preictal</th>
+      <th>test_interictal</th>
+      <th>test_ratio</th>
+      <th>test_total</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>partion_1</th>
+      <td>532</td>
+      <td>2880</td>
+      <td>15.59</td>
+      <td>3412</td>
+      <td>133</td>
+      <td>720</td>
+      <td>15.59</td>
+      <td>853</td>
+      <td>60</td>
+      <td>1200</td>
+      <td>4.76</td>
+      <td>1260</td>
+    </tr>
+    <tr>
+      <th>partion_2</th>
+      <td>532</td>
+      <td>2880</td>
+      <td>15.59</td>
+      <td>3412</td>
+      <td>133</td>
+      <td>720</td>
+      <td>15.59</td>
+      <td>853</td>
+      <td>60</td>
+      <td>1200</td>
+      <td>4.76</td>
+      <td>1260</td>
+    </tr>
+    <tr>
+      <th>partion_3</th>
+      <td>532</td>
+      <td>2880</td>
+      <td>15.59</td>
+      <td>3412</td>
+      <td>133</td>
+      <td>720</td>
+      <td>15.59</td>
+      <td>853</td>
+      <td>60</td>
+      <td>1200</td>
+      <td>4.76</td>
+      <td>1260</td>
+    </tr>
+    <tr>
+      <th>partion_4</th>
+      <td>532</td>
+      <td>2880</td>
+      <td>15.59</td>
+      <td>3412</td>
+      <td>133</td>
+      <td>720</td>
+      <td>15.59</td>
+      <td>853</td>
+      <td>60</td>
+      <td>1200</td>
+      <td>4.76</td>
+      <td>1260</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<h2>Get one partition</h2>
+<div class="highlight"><pre><span></span><span class="n">i</span> <span class="o">=</span> <span class="mi">0</span>
+<span class="n">partition</span> <span class="o">=</span> <span class="n">partitions</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+</pre></div>
+
+
+<div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">generators.cnn_generator</span> <span class="kn">import</span> <span class="n">get_class_weights</span>
+<span class="n">class_weights</span> <span class="o">=</span> <span class="n">get_class_weights</span><span class="p">(</span><span class="n">labels</span><span class="o">=</span><span class="n">labels</span><span class="p">,</span> 
+                                  <span class="n">train_list</span><span class="o">=</span><span class="n">partition</span><span class="p">[</span><span class="s1">&#39;train&#39;</span><span class="p">])</span>
+
+
+<span class="c1">#class_weight = {0: weight_for_0, 1: weight_for_1}</span>
+
+<span class="c1">#class_weights = &#39;unbalanced&#39;</span>
+<span class="c1">#class_weights = {0:1, 1:1}</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">class_weights</span><span class="p">)</span>
+</pre></div>
+
+
+<div class="highlight"><pre><span></span><span class="err">{0: 1.0, 1: 5.413533834586466}</span>
+</pre></div>
+
+
+<h2>Define the model</h2>
+<div class="highlight"><pre><span></span><span class="c1"># Define a model to train</span>
+<span class="n">name</span> <span class="o">=</span> <span class="n">target</span> <span class="o">+</span> <span class="s2">&quot;_partition_</span><span class="si">%d</span><span class="s2">&quot;</span> <span class="o">%</span><span class="n">i</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">CNN_LSTM</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
+            <span class="n">target</span><span class="o">=</span><span class="n">target</span><span class="p">,</span>
+            <span class="n">n_steps</span><span class="o">=</span><span class="mi">12</span><span class="p">,</span>
+            <span class="n">dim</span><span class="o">=</span><span class="p">(</span><span class="mi">114</span><span class="p">,</span> <span class="mi">114</span><span class="p">),</span>
+            <span class="n">n_channels</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+            <span class="n">batch_size</span><span class="o">=</span><span class="mi">64</span><span class="p">,</span>
+            <span class="n">nb_classes</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+            <span class="n">epochs</span><span class="o">=</span><span class="mi">400</span><span class="p">)</span>
+<span class="n">model</span><span class="o">.</span><span class="n">setup</span><span class="p">()</span>
+</pre></div>
+
+
+<div class="highlight"><pre><span></span><span class="err">&lt;models.model.CNN_LSTM at 0x7f0df2b9ccd0&gt;</span>
+</pre></div>
+
+
+<div class="highlight"><pre><span></span><span class="nb">print</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">summary</span><span class="p">())</span>
+</pre></div>
+
+
+<div class="highlight"><pre><span></span><span class="c">Model: &quot;sequential&quot;</span>
+<span class="err">_________________________________________________________________</span>
+<span class="err">Layer (type)                 Output Shape              Param #   </span>
+<span class="err">=================================================================</span>
+<span class="err">time_distributed (TimeDistri (None, 12, 114, 114, 16)  160       </span>
+<span class="err">_________________________________________________________________</span>
+<span class="err">time_distributed_1 (TimeDist (None, 12, 57, 57, 16)    0         </span>
+<span class="err">_________________________________________________________________</span>
+<span class="err">time_distributed_2 (TimeDist (None, 12, 57, 57, 16)    0         </span>
+<span class="err">_________________________________________________________________</span>
+<span class="err">time_distributed_3 (TimeDist (None, 12, 55, 55, 32)    4640      </span>
+<span class="err">_________________________________________________________________</span>
+<span class="err">time_distributed_4 (TimeDist (None, 12, 27, 27, 32)    0         </span>
+<span class="err">_________________________________________________________________</span>
+<span class="err">time_distributed_5 (TimeDist (None, 12, 27, 27, 32)    0         </span>
+<span class="err">_________________________________________________________________</span>
+<span class="err">time_distributed_6 (TimeDist (None, 12, 13, 13, 32)    9248      </span>
+<span class="err">_________________________________________________________________</span>
+<span class="err">time_distributed_7 (TimeDist (None, 12, 4, 4, 32)      0         </span>
+<span class="err">_________________________________________________________________</span>
+<span class="err">time_distributed_8 (TimeDist (None, 12, 512)           0         </span>
+<span class="err">_________________________________________________________________</span>
+<span class="err">dropout_2 (Dropout)          (None, 12, 512)           0         </span>
+<span class="err">_________________________________________________________________</span>
+<span class="err">lstm (LSTM)                  (None, 32)                69760     </span>
+<span class="err">_________________________________________________________________</span>
+<span class="err">dropout_3 (Dropout)          (None, 32)                0         </span>
+<span class="err">_________________________________________________________________</span>
+<span class="err">dense (Dense)                (None, 16)                528       </span>
+<span class="err">_________________________________________________________________</span>
+<span class="err">dense_1 (Dense)              (None, 1)                 17        </span>
+<span class="err">=================================================================</span>
+<span class="err">Total params: 84,353</span>
+<span class="err">Trainable params: 84,353</span>
+<span class="err">Non-trainable params: 0</span>
+<span class="err">_________________________________________________________________</span>
+<span class="err">None</span>
+</pre></div>
+
+
+<div class="highlight"><pre><span></span><span class="c1"># Train the model for partition i</span>
+<span class="nb">print</span><span class="p">(</span><span class="s1">&#39;</span><span class="se">\n\n</span><span class="s1">******************   Begin training for partition&#39;</span><span class="p">,</span> <span class="n">i</span><span class="p">)</span>
+<span class="n">history</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">partition</span><span class="o">=</span><span class="n">partition</span><span class="p">,</span> 
+          <span class="n">labels</span><span class="o">=</span><span class="n">labels</span><span class="p">,</span>
+          <span class="n">mode_weights</span><span class="o">=</span><span class="n">class_weights</span><span class="p">,</span>
+          <span class="n">settings</span><span class="o">=</span><span class="n">SETTINGS</span><span class="p">)</span>
+</pre></div>
+
+
+<div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">matplotlib</span> <span class="kn">import</span> <span class="n">pyplot</span> <span class="k">as</span> <span class="n">plt</span>
+<span class="k">def</span> <span class="nf">plot_loss</span><span class="p">(</span><span class="n">history</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">):</span>
+  <span class="c1"># Use a log scale to show the wide range of values.</span>
+  <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">history</span><span class="o">.</span><span class="n">epoch</span><span class="p">,</span>  <span class="n">history</span><span class="o">.</span><span class="n">history</span><span class="p">[</span><span class="s1">&#39;loss&#39;</span><span class="p">],</span> <span class="n">label</span><span class="o">=</span><span class="s1">&#39;Train &#39;</span><span class="o">+</span><span class="n">label</span><span class="p">)</span>
+  <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">history</span><span class="o">.</span><span class="n">epoch</span><span class="p">,</span>  <span class="n">history</span><span class="o">.</span><span class="n">history</span><span class="p">[</span><span class="s1">&#39;val_loss&#39;</span><span class="p">],</span> <span class="n">label</span><span class="o">=</span><span class="s1">&#39;Val &#39;</span><span class="o">+</span><span class="n">label</span><span class="p">,</span> <span class="n">linestyle</span><span class="o">=</span><span class="s2">&quot;--&quot;</span><span class="p">)</span>
+  <span class="n">plt</span><span class="o">.</span><span class="n">xlabel</span><span class="p">(</span><span class="s1">&#39;Epoch&#39;</span><span class="p">)</span>
+  <span class="n">plt</span><span class="o">.</span><span class="n">ylabel</span><span class="p">(</span><span class="s1">&#39;Loss&#39;</span><span class="p">)</span>
+  <span class="n">plt</span><span class="o">.</span><span class="n">legend</span><span class="p">()</span>
+<span class="k">def</span> <span class="nf">plot_acc</span><span class="p">(</span><span class="n">history</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">):</span>
+  <span class="c1"># Use a log scale to show the wide range of values.</span>
+  <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">history</span><span class="o">.</span><span class="n">epoch</span><span class="p">,</span>  <span class="n">history</span><span class="o">.</span><span class="n">history</span><span class="p">[</span><span class="s1">&#39;accuracy&#39;</span><span class="p">],</span> <span class="n">label</span><span class="o">=</span><span class="s1">&#39;Train &#39;</span><span class="o">+</span><span class="n">label</span><span class="p">)</span>
+  <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">history</span><span class="o">.</span><span class="n">epoch</span><span class="p">,</span>  <span class="n">history</span><span class="o">.</span><span class="n">history</span><span class="p">[</span><span class="s1">&#39;val_accuracy&#39;</span><span class="p">],</span> <span class="n">label</span><span class="o">=</span><span class="s1">&#39;Val &#39;</span><span class="o">+</span><span class="n">label</span><span class="p">,</span> <span class="n">linestyle</span><span class="o">=</span><span class="s2">&quot;--&quot;</span><span class="p">)</span>
+  <span class="n">plt</span><span class="o">.</span><span class="n">xlabel</span><span class="p">(</span><span class="s1">&#39;Epoch&#39;</span><span class="p">)</span>
+  <span class="n">plt</span><span class="o">.</span><span class="n">ylabel</span><span class="p">(</span><span class="s1">&#39;acc&#39;</span><span class="p">)</span>
+  <span class="n">plt</span><span class="o">.</span><span class="n">legend</span><span class="p">()</span>
+</pre></div>
+
+
+<div class="highlight"><pre><span></span><span class="n">plot_loss</span><span class="p">(</span><span class="n">history</span><span class="p">)</span>
+</pre></div>
+
+
+<div class="highlight"><pre><span></span><span class="n">plot_acc</span><span class="p">(</span><span class="n">history</span><span class="p">)</span>
+</pre></div>
+
+
+<h2>Evaluation</h2>
+<div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">sklearn.metrics</span> <span class="kn">import</span> <span class="n">confusion_matrix</span>
+<span class="kn">import</span> <span class="nn">seaborn</span> <span class="k">as</span> <span class="nn">sns</span>
+<span class="kn">from</span> <span class="nn">matplotlib</span> <span class="kn">import</span> <span class="n">pyplot</span> <span class="k">as</span> <span class="n">plt</span>
+</pre></div>
+
+
+<div class="highlight"><pre><span></span><span class="c1">#Evaluation</span>
+<span class="n">path</span> <span class="o">=</span><span class="n">SETTINGS</span><span class="p">[</span><span class="s2">&quot;cachedir&quot;</span><span class="p">]</span> <span class="o">+</span> <span class="s2">&quot;</span><span class="si">%s</span><span class="s2">/&quot;</span> <span class="o">%</span> <span class="n">target</span>
+<span class="n">predictions</span> <span class="o">=</span> <span class="n">DataEvaluator</span><span class="p">(</span><span class="n">path</span><span class="o">=</span><span class="n">path</span><span class="p">,</span>
+                            <span class="n">list_IDs</span><span class="o">=</span><span class="n">partition</span><span class="p">[</span><span class="s2">&quot;test&quot;</span><span class="p">],</span> 
+                            <span class="n">labels</span><span class="o">=</span><span class="n">labels</span><span class="p">)</span>
+</pre></div>
+
+
+<div class="highlight"><pre><span></span><span class="n">accuracy</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="n">sensitivity</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="n">specificity</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="n">auc_roc</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="n">s_accuracy</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="n">s_sensitivity</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="n">s_specificity</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="n">s_auc_roc</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="n">indexes</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="n">FPRs</span> <span class="o">=</span> <span class="p">[]</span>
+</pre></div>
+
+
+<div class="highlight"><pre><span></span><span class="c1"># Slice evaluation</span>
+<span class="n">predictions</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>
+<span class="n">assessment</span> <span class="o">=</span> <span class="n">predictions</span><span class="o">.</span><span class="n">get_assessment</span><span class="p">()</span>
+<span class="n">accuracy</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">assessment</span><span class="p">[</span><span class="s1">&#39;accuracy&#39;</span><span class="p">])</span>
+<span class="n">sensitivity</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">assessment</span><span class="p">[</span><span class="s1">&#39;sensitivity&#39;</span><span class="p">])</span>
+<span class="n">specificity</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">assessment</span><span class="p">[</span><span class="s1">&#39;specificity&#39;</span><span class="p">])</span>
+<span class="n">auc_roc</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">assessment</span><span class="p">[</span><span class="s1">&#39;auc&#39;</span><span class="p">])</span>
+
+
+<span class="c1"># 10min Segment evaluation</span>
+<span class="n">predictions</span><span class="o">.</span><span class="n">predict_for_5_min_segments</span><span class="p">()</span>
+<span class="n">predictions</span><span class="o">.</span><span class="n">segment_based_assessment</span><span class="p">()</span>
+<span class="n">s_accuracy</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">assessment</span><span class="p">[</span><span class="s1">&#39;accuracy&#39;</span><span class="p">])</span>
+<span class="n">s_sensitivity</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">assessment</span><span class="p">[</span><span class="s1">&#39;sensitivity&#39;</span><span class="p">])</span>
+<span class="n">s_specificity</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">assessment</span><span class="p">[</span><span class="s1">&#39;specificity&#39;</span><span class="p">])</span>
+<span class="n">s_auc_roc</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">assessment</span><span class="p">[</span><span class="s1">&#39;auc&#39;</span><span class="p">])</span>  
+
+<span class="c1"># Event evaluation</span>
+<span class="n">index</span> <span class="o">=</span> <span class="n">predictions</span><span class="o">.</span><span class="n">event_based_sensitivity</span><span class="p">()</span>
+<span class="n">fpr</span> <span class="o">=</span> <span class="n">predictions</span><span class="o">.</span><span class="n">false_prediction_rate_per_hour</span><span class="p">()</span>
+<span class="n">indexes</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">index</span><span class="p">)</span>
+<span class="n">FPRs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">fpr</span><span class="p">)</span>
+</pre></div>
+
+
+<div class="highlight"><pre><span></span><span class="nb">print</span><span class="p">(</span><span class="n">sensitivity</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">specificity</span><span class="p">)</span>
+</pre></div>
+
+
+<div class="highlight"><pre><span></span><span class="nb">print</span><span class="p">(</span><span class="n">predictions</span><span class="o">.</span><span class="n">y_segment_preictal</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">predictions</span><span class="o">.</span><span class="n">y_segment_interictal</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+</pre></div>
+
+
+<div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">plot_cm</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="n">predictions</span><span class="p">,</span> <span class="n">p</span><span class="o">=</span><span class="mf">0.5</span><span class="p">):</span>
+  <span class="n">cm</span> <span class="o">=</span> <span class="n">confusion_matrix</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="n">predictions</span> <span class="o">&gt;</span> <span class="n">p</span><span class="p">)</span>
+  <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">5</span><span class="p">,</span><span class="mi">5</span><span class="p">))</span>
+  <span class="n">sns</span><span class="o">.</span><span class="n">heatmap</span><span class="p">(</span><span class="n">cm</span><span class="p">,</span> <span class="n">annot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">fmt</span><span class="o">=</span><span class="s2">&quot;d&quot;</span><span class="p">)</span>
+  <span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="s1">&#39;Confusion matrix @</span><span class="si">{:.2f}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">p</span><span class="p">))</span>
+  <span class="n">plt</span><span class="o">.</span><span class="n">ylabel</span><span class="p">(</span><span class="s1">&#39;Actual label&#39;</span><span class="p">)</span>
+  <span class="n">plt</span><span class="o">.</span><span class="n">xlabel</span><span class="p">(</span><span class="s1">&#39;Predicted label&#39;</span><span class="p">)</span>
+  <span class="nb">print</span><span class="p">(</span><span class="s1">&#39; (True Negatives): &#39;</span><span class="p">,</span> <span class="n">cm</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">])</span>
+  <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;(False Positives): &#39;</span><span class="p">,</span> <span class="n">cm</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">1</span><span class="p">])</span>
+  <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;(False Negatives): &#39;</span><span class="p">,</span> <span class="n">cm</span><span class="p">[</span><span class="mi">1</span><span class="p">][</span><span class="mi">0</span><span class="p">])</span>
+  <span class="nb">print</span><span class="p">(</span><span class="s1">&#39; (True Positives): &#39;</span><span class="p">,</span> <span class="n">cm</span><span class="p">[</span><span class="mi">1</span><span class="p">][</span><span class="mi">1</span><span class="p">])</span>
+</pre></div>
+
+
+<div class="highlight"><pre><span></span><span class="n">plot_cm</span><span class="p">(</span><span class="n">predictions</span><span class="o">.</span><span class="n">y_true</span><span class="p">,</span> <span class="n">predictions</span><span class="o">.</span><span class="n">y_prob</span><span class="p">)</span>
+</pre></div>
+
+
+<div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">sklearn.metrics</span> <span class="kn">import</span> <span class="n">roc_curve</span>
+</pre></div>
+
+
+<div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">plot_roc</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="n">predictions</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+  <span class="n">fp</span><span class="p">,</span> <span class="n">tp</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">roc_curve</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="n">predictions</span><span class="p">)</span>
+
+  <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="mi">100</span><span class="o">*</span><span class="n">fp</span><span class="p">,</span> <span class="mi">100</span><span class="o">*</span><span class="n">tp</span><span class="p">,</span><span class="n">linewidth</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+  <span class="n">plt</span><span class="o">.</span><span class="n">xlabel</span><span class="p">(</span><span class="s1">&#39;False positives [%]&#39;</span><span class="p">)</span>
+  <span class="n">plt</span><span class="o">.</span><span class="n">ylabel</span><span class="p">(</span><span class="s1">&#39;True positives [%]&#39;</span><span class="p">)</span>
+  <span class="c1">#plt.xlim([-0.5,20])</span>
+  <span class="c1">#plt.ylim([80,100.5])</span>
+  <span class="n">plt</span><span class="o">.</span><span class="n">grid</span><span class="p">(</span><span class="kc">True</span><span class="p">)</span>
+  <span class="n">ax</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">gca</span><span class="p">()</span>
+  <span class="n">ax</span><span class="o">.</span><span class="n">set_aspect</span><span class="p">(</span><span class="s1">&#39;equal&#39;</span><span class="p">)</span>
+</pre></div>
+
+
+<div class="highlight"><pre><span></span><span class="n">plot_roc</span><span class="p">(</span><span class="n">predictions</span><span class="o">.</span><span class="n">y_true</span><span class="p">,</span> <span class="n">predictions</span><span class="o">.</span><span class="n">y_prob</span><span class="p">)</span>
+</pre></div>
+
+
+<div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">plot_metrics</span><span class="p">(</span><span class="n">history</span><span class="p">):</span>
+  <span class="n">metrics</span> <span class="o">=</span>  <span class="p">[</span><span class="s1">&#39;loss&#39;</span><span class="p">,</span> <span class="s1">&#39;auc&#39;</span><span class="p">,</span> <span class="s1">&#39;precision&#39;</span><span class="p">,</span> <span class="s1">&#39;recall&#39;</span><span class="p">]</span>
+  <span class="k">for</span> <span class="n">n</span><span class="p">,</span> <span class="n">metric</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">metrics</span><span class="p">):</span>
+    <span class="n">name</span> <span class="o">=</span> <span class="n">metric</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;_&quot;</span><span class="p">,</span><span class="s2">&quot; &quot;</span><span class="p">)</span><span class="o">.</span><span class="n">capitalize</span><span class="p">()</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">subplot</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="n">n</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">history</span><span class="o">.</span><span class="n">epoch</span><span class="p">,</span>  <span class="n">history</span><span class="o">.</span><span class="n">history</span><span class="p">[</span><span class="n">metric</span><span class="p">],</span> <span class="n">color</span><span class="o">=</span><span class="n">colors</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">label</span><span class="o">=</span><span class="s1">&#39;Train&#39;</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">history</span><span class="o">.</span><span class="n">epoch</span><span class="p">,</span> <span class="n">history</span><span class="o">.</span><span class="n">history</span><span class="p">[</span><span class="s1">&#39;val_&#39;</span><span class="o">+</span><span class="n">metric</span><span class="p">],</span>
+             <span class="n">color</span><span class="o">=</span><span class="n">colors</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">linestyle</span><span class="o">=</span><span class="s2">&quot;--&quot;</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="s1">&#39;Val&#39;</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">xlabel</span><span class="p">(</span><span class="s1">&#39;Epoch&#39;</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">ylabel</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">metric</span> <span class="o">==</span> <span class="s1">&#39;loss&#39;</span><span class="p">:</span>
+      <span class="n">plt</span><span class="o">.</span><span class="n">ylim</span><span class="p">([</span><span class="mi">0</span><span class="p">,</span> <span class="n">plt</span><span class="o">.</span><span class="n">ylim</span><span class="p">()[</span><span class="mi">1</span><span class="p">]])</span>
+    <span class="k">elif</span> <span class="n">metric</span> <span class="o">==</span> <span class="s1">&#39;auc&#39;</span><span class="p">:</span>
+      <span class="n">plt</span><span class="o">.</span><span class="n">ylim</span><span class="p">([</span><span class="mf">0.8</span><span class="p">,</span><span class="mi">1</span><span class="p">])</span>
+    <span class="k">else</span><span class="p">:</span>
+      <span class="n">plt</span><span class="o">.</span><span class="n">ylim</span><span class="p">([</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="p">])</span>
+
+    <span class="n">plt</span><span class="o">.</span><span class="n">legend</span><span class="p">()</span>
+</pre></div>
+
+
+<div class="highlight"><pre><span></span>
+</pre></div>                </article>
+            </aside><!-- /#featured -->
+        <section id="extras" class="body">
+                <div class="social">
+                        <h2>social</h2>
+                        <ul>
+                            <li><a href="/feeds/all.atom.xml" type="application/atom+xml" rel="alternate">atom feed</a></li>
+
+                        </ul>
+                </div><!-- /.social -->
+        </section><!-- /#extras -->
+
+        <footer id="contentinfo" class="body">
+                <address id="about" class="vcard body">
+                Proudly powered by <a href="https://getpelican.com/">Pelican</a>, which takes great advantage of <a href="https://www.python.org/">Python</a>.
+                </address><!-- /#about -->
+
+                <p>The theme is by <a href="https://www.smashingmagazine.com/2009/08/designing-a-html-5-layout-from-scratch/">Smashing Magazine</a>, thanks!</p>
+        </footer><!-- /#contentinfo -->
+
+</body>
+</html>
